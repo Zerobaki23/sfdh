@@ -13,7 +13,7 @@ local requestFunction =
     request
 
 local function stripEmojis(str)
-    return str:gsub("[^\32-\126]", "")
+    return tostring(str):gsub("[^\32-\126]", "")
 end
 
 local function setupTeleportQueue()
@@ -27,7 +27,7 @@ end
 local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
-        local lower = entry:lower()
+        local lower = tostring(entry):lower()
         if lower:find("serum") or lower:find("mythic") then
             return true
         end
@@ -42,34 +42,37 @@ local function sendWebhook(gold, xp, canes, unknowns)
 
     local description = string.format(
         "Gold: %s\nXP: %s\nCanes: %s",
-        stripEmojis(tostring(gold or "?")),
-        stripEmojis(tostring(xp or "?")),
-        stripEmojis(tostring(canes or "?"))
+        stripEmojis(gold),
+        stripEmojis(xp),
+        stripEmojis(canes)
     )
 
     if unknowns and #unknowns > 0 then
-        local cleanUnknowns = {}
+        local cleanLines = {}
         for _, entry in ipairs(unknowns) do
-            table.insert(cleanUnknowns, stripEmojis(entry))
+            cleanLines[#cleanLines + 1] = stripEmojis(tostring(entry))
         end
-        description = description .. "\n\nOthers:\n" .. table.concat(cleanUnknowns, "\n")
+        description = description .. "\n\nOthers:\n" .. table.concat(cleanLines, "\n")
     end
 
     if shouldPing then
         description = description .. "\n\nRARE DROP DETECTED!"
     end
 
-    local payload = {
-        username = "MY USERNAME",
-        content = shouldPing and ("<@" .. PING_USER_ID .. "> Rare drop detected!") or nil,
-        embeds = {
-            {
-                title = "Rewards Update",
-                description = description,
-                color = shouldPing and 15158332 or 16766720,
-            }
-        }
+    local embed = {
+        title = "Rewards Update",
+        description = description,
+        color = shouldPing and 15158332 or 16766720,
     }
+
+    local payload = {
+        username = "Wesh the diddler",
+        embeds = { embed },
+    }
+
+    if shouldPing then
+        payload.content = "<@" .. PING_USER_ID .. "> Rare drop detected!"
+    end
 
     local ok, encoded = pcall(HttpService.JSONEncode, HttpService, payload)
     if not ok then return end
@@ -107,8 +110,8 @@ local function getRewards(items)
                     local quantityLabel = inner:FindFirstChild("Quantity")
                     local icon = inner:FindFirstChild("Icon")
 
-                    local quantity = quantityLabel and quantityLabel.Text or "?"
-                    local iconId = icon and icon.Image or "?"
+                    local quantity = quantityLabel and tostring(quantityLabel.Text) or "?"
+                    local iconId = icon and tostring(icon.Image) or "?"
 
                     local label = iconLabels[iconId]
 
@@ -137,7 +140,7 @@ local function getRewards(items)
                     elseif label == "Canes" then
                         canes = quantity
                     else
-                        table.insert(unknowns, stripEmojis(label) .. " | Qty: " .. quantity)
+                        unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
                     end
                 end
             end
@@ -149,7 +152,6 @@ end
 
 setupTeleportQueue()
 
-local player = Players.LocalPlayer
 local gui = player:WaitForChild("PlayerGui")
 local interface = gui:WaitForChild("Interface")
 local rewards = interface:WaitForChild("Rewards")
@@ -158,16 +160,15 @@ local info = main1:WaitForChild("Info")
 local main2 = info:WaitForChild("Main")
 local items = main2:WaitForChild("Items")
 
--- Listen for when Rewards becomes visible
 rewards.Changed:Connect(function(prop)
     if prop == "Visible" and rewards.Visible then
-        task.wait(0.5) -- small delay to let items populate
+        task.wait(0.5)
 
         local ok, gold, xp, canes, unknowns = pcall(getRewards, items)
 
         if ok then
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
-            if unknowns then
+            if unknowns and #unknowns > 0 then
                 snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
             end
 
