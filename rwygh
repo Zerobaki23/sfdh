@@ -46,28 +46,28 @@ local function sendWebhook(gold, xp, canes, unknowns)
     local shouldPing = checkForRareDrop(unknowns)
 
     local description = string.format(
-        "🥇 **Gold:** %s\n⭐ **XP:** %s\n🍬 **Canes:** %s",
+        "Gold: %s\nXP: %s\nCanes: %s",
         gold or "?",
         xp or "?",
         canes or "?"
     )
 
     if unknowns and #unknowns > 0 then
-        description = description .. "\n\n**🔍 Others:**\n" .. table.concat(unknowns, "\n")
+        description = description .. "\n\nOthers:\n" .. table.concat(unknowns, "\n")
     end
 
     if shouldPing then
-        description = description .. "\n\n🚨 **RARE DROP DETECTED!**"
+        description = description .. "\n\nRARE DROP DETECTED!"
     end
 
     local payload = {
         username = "MY USERNAME",
-        content = shouldPing and ("<@" .. PING_USER_ID .. "> 🚨 Rare drop detected!") or nil,
+        content = shouldPing and ("<@" .. PING_USER_ID .. "> Rare drop detected!") or nil,
         embeds = {
             {
-                title = "🎁 Rewards Update",
+                title = "Rewards Update",
                 description = description,
-                color = shouldPing and 15158332 or 16766720, -- Red if rare, Gold if normal
+                color = shouldPing and 15158332 or 16766720,
             }
         }
     }
@@ -97,16 +97,6 @@ end
 
 local player = Players.LocalPlayer
 
-print("Waiting for GUI...")
-local gui = player:WaitForChild("PlayerGui")
-local interface = gui:WaitForChild("Interface")
-local rewards = interface:WaitForChild("Rewards")
-local main1 = rewards:WaitForChild("Main")
-local info = main1:WaitForChild("Info")
-local main2 = info:WaitForChild("Main")
-local items = main2:WaitForChild("Items")
-print("Items found!")
-
 local iconLabels = {
     ["rbxassetid://15296242924"] = "EXP",
     ["rbxassetid://15147178963"] = "Gold",
@@ -115,7 +105,70 @@ local iconLabels = {
 
 local lastSnapshot = ""
 
-local function getRewards()
+-- Wait for full GUI tree to be ready
+local function waitForGui()
+    print("Waiting for GUI...")
+
+    local gui = player:WaitForChild("PlayerGui")
+
+    local interface
+    repeat
+        interface = gui:FindFirstChild("Interface")
+        if not interface then task.wait(0.5) end
+    until interface
+
+    local rewards
+    repeat
+        rewards = interface:FindFirstChild("Rewards")
+        if not rewards then task.wait(0.5) end
+    until rewards
+
+    local main1
+    repeat
+        main1 = rewards:FindFirstChild("Main")
+        if not main1 then task.wait(0.5) end
+    until main1
+
+    local info
+    repeat
+        info = main1:FindFirstChild("Info")
+        if not info then task.wait(0.5) end
+    until info
+
+    local main2
+    repeat
+        main2 = info:FindFirstChild("Main")
+        if not main2 then task.wait(0.5) end
+    until main2
+
+    local items
+    repeat
+        items = main2:FindFirstChild("Items")
+        if not items then task.wait(0.5) end
+    until items
+
+    -- Wait until Items has at least 1 Frame child (slots loaded)
+    repeat
+        local hasSlot = false
+        for _, child in ipairs(items:GetChildren()) do
+            if child:IsA("Frame") then
+                hasSlot = true
+                break
+            end
+        end
+        if not hasSlot then
+            print("Waiting for item slots to populate...")
+            task.wait(0.5)
+        else
+            break
+        end
+    until false
+
+    print("GUI fully loaded!")
+    return items
+end
+
+local function getRewards(items)
     local gold, xp, canes = "?", "?", "?"
     local unknowns = {}
 
@@ -160,7 +213,7 @@ local function getRewards()
                     elseif label == "Canes" then
                         canes = quantity
                     else
-                        table.insert(unknowns, "❓ " .. label .. " | Qty: " .. quantity)
+                        table.insert(unknowns, label .. " | Qty: " .. quantity)
                     end
                 else
                     print("No Inner found in slot:", slot.Name)
@@ -176,10 +229,12 @@ end
 
 setupTeleportQueue()
 
+local items = waitForGui()
+
 print("Starting rewards tracker...")
 
 while true do
-    local ok, gold, xp, canes, unknowns = pcall(getRewards)
+    local ok, gold, xp, canes, unknowns = pcall(getRewards, items)
 
     if ok then
         local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
