@@ -1,0 +1,202 @@
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+
+local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
+
+local PING_USER_ID = "832942242498084888"
+
+local requestFunction =
+    (syn and syn.request) or
+    (http and http.request) or
+    http_request or
+    request
+
+local function setupTeleportQueue()
+    if syn and syn.queue_on_teleport then
+        syn.queue_on_teleport([[
+            -- paste entire script here or loadstring your hosted raw URL
+        ]])
+    elseif queue_on_teleport then
+        queue_on_teleport([[
+            -- paste entire script here or loadstring your hosted raw URL
+        ]])
+    else
+        warn("queue_on_teleport not supported on this executor!")
+    end
+end
+
+local function checkForRareDrop(unknowns)
+    if not unknowns or #unknowns == 0 then return false end
+    for _, entry in ipairs(unknowns) do
+        local lower = entry:lower()
+        if lower:find("serum") or lower:find("mythic") then
+            return true
+        end
+    end
+    return false
+end
+
+local function sendWebhook(gold, xp, canes, unknowns)
+    if not requestFunction then
+        warn("No request function found!")
+        return
+    end
+
+    local shouldPing = checkForRareDrop(unknowns)
+
+    local description = string.format(
+        "🥇 **Gold:** %s\n⭐ **XP:** %s\n🍬 **Canes:** %s",
+        gold or "?",
+        xp or "?",
+        canes or "?"
+    )
+
+    if unknowns and #unknowns > 0 then
+        description = description .. "\n\n**🔍 Others:**\n" .. table.concat(unknowns, "\n")
+    end
+
+    if shouldPing then
+        description = description .. "\n\n🚨 **RARE DROP DETECTED!**"
+    end
+
+    local payload = {
+        username = "MY USERNAME",
+        content = shouldPing and ("<@" .. PING_USER_ID .. "> 🚨 Rare drop detected!") or nil,
+        embeds = {
+            {
+                title = "🎁 Rewards Update",
+                description = description,
+                color = shouldPing and 15158332 or 16766720, -- Red if rare, Gold if normal
+            }
+        }
+    }
+
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, payload)
+    if not ok then
+        warn("JSON encode failed:", encoded)
+        return
+    end
+
+    local ok2, response = pcall(requestFunction, {
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = encoded
+    })
+
+    if not ok2 then
+        warn("Request failed:", response)
+        return
+    end
+
+    print("Status:", response.StatusCode)
+    print("Body:", response.Body)
+    task.wait(1)
+end
+
+local player = Players.LocalPlayer
+
+print("Waiting for GUI...")
+local gui = player:WaitForChild("PlayerGui")
+local interface = gui:WaitForChild("Interface")
+local rewards = interface:WaitForChild("Rewards")
+local main1 = rewards:WaitForChild("Main")
+local info = main1:WaitForChild("Info")
+local main2 = info:WaitForChild("Main")
+local items = main2:WaitForChild("Items")
+print("Items found!")
+
+local iconLabels = {
+    ["rbxassetid://15296242924"] = "EXP",
+    ["rbxassetid://15147178963"] = "Gold",
+    ["rbxassetid://138197199153705"] = "Canes",
+}
+
+local lastSnapshot = ""
+
+local function getRewards()
+    local gold, xp, canes = "?", "?", "?"
+    local unknowns = {}
+
+    for _, slot in ipairs(items:GetChildren()) do
+        if slot:IsA("Frame") then
+            local main = slot:FindFirstChild("Main")
+            if main then
+                local inner = main:FindFirstChild("Inner")
+                if inner then
+                    local quantityLabel = inner:FindFirstChild("Quantity")
+                    local icon = inner:FindFirstChild("Icon")
+
+                    local quantity = quantityLabel and quantityLabel.Text or "?"
+                    local iconId = icon and icon.Image or "?"
+
+                    print("Slot:", slot.Name, "| Icon:", iconId, "| Qty:", quantity)
+
+                    local label = iconLabels[iconId]
+
+                    if not label then
+                        local assetId = iconId:match("rbxassetid://(%d+)") or iconId:match("id=(%d+)") or iconId
+                        label = "Unknown (ID: " .. assetId .. ")"
+
+                        local ok, response = pcall(requestFunction, {
+                            Url = "https://economy.roblox.com/v2/assets/" .. assetId .. "/details",
+                            Method = "GET",
+                            Headers = { ["Content-Type"] = "application/json" }
+                        })
+                        if ok and response and response.StatusCode == 200 then
+                            local ok2, data = pcall(HttpService.JSONDecode, HttpService, response.Body)
+                            if ok2 and data and data.Name then
+                                label = data.Name .. " (ID: " .. assetId .. ")"
+                                iconLabels[iconId] = label
+                            end
+                        end
+                    end
+
+                    if label == "Gold" then
+                        gold = quantity
+                    elseif label == "EXP" then
+                        xp = quantity
+                    elseif label == "Canes" then
+                        canes = quantity
+                    else
+                        table.insert(unknowns, "❓ " .. label .. " | Qty: " .. quantity)
+                    end
+                else
+                    print("No Inner found in slot:", slot.Name)
+                end
+            else
+                print("No Main found in slot:", slot.Name)
+            end
+        end
+    end
+
+    return gold, xp, canes, unknowns
+end
+
+setupTeleportQueue()
+
+print("Starting rewards tracker...")
+
+while true do
+    local ok, gold, xp, canes, unknowns = pcall(getRewards)
+
+    if ok then
+        local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
+        if unknowns then
+            snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
+        end
+
+        if snapshot ~= lastSnapshot then
+            lastSnapshot = snapshot
+            print("Sending update...")
+            sendWebhook(gold, xp, canes, unknowns)
+        else
+            print("No change detected.")
+        end
+    else
+        warn("getRewards error:", gold)
+    end
+
+    task.wait(5)
+end
