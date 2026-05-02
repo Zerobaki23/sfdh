@@ -12,6 +12,10 @@ local requestFunction =
     http_request or
     request
 
+local function stripEmojis(str)
+    return str:gsub("[^\32-\126]", "")
+end
+
 local function setupTeleportQueue()
     if syn and syn.queue_on_teleport then
         syn.queue_on_teleport([[
@@ -47,13 +51,17 @@ local function sendWebhook(gold, xp, canes, unknowns)
 
     local description = string.format(
         "Gold: %s\nXP: %s\nCanes: %s",
-        gold or "?",
-        xp or "?",
-        canes or "?"
+        stripEmojis(tostring(gold or "?")),
+        stripEmojis(tostring(xp or "?")),
+        stripEmojis(tostring(canes or "?"))
     )
 
     if unknowns and #unknowns > 0 then
-        description = description .. "\n\nOthers:\n" .. table.concat(unknowns, "\n")
+        local cleanUnknowns = {}
+        for _, entry in ipairs(unknowns) do
+            table.insert(cleanUnknowns, stripEmojis(entry))
+        end
+        description = description .. "\n\nOthers:\n" .. table.concat(cleanUnknowns, "\n")
     end
 
     if shouldPing then
@@ -105,7 +113,6 @@ local iconLabels = {
 
 local lastSnapshot = ""
 
--- Wait for full GUI tree to be ready
 local function waitForGui()
     print("Waiting for GUI...")
 
@@ -147,7 +154,6 @@ local function waitForGui()
         if not items then task.wait(0.5) end
     until items
 
-    -- Wait until Items has at least 1 Frame child (slots loaded)
     repeat
         local hasSlot = false
         for _, child in ipairs(items:GetChildren()) do
@@ -200,7 +206,7 @@ local function getRewards(items)
                         if ok and response and response.StatusCode == 200 then
                             local ok2, data = pcall(HttpService.JSONDecode, HttpService, response.Body)
                             if ok2 and data and data.Name then
-                                label = data.Name .. " (ID: " .. assetId .. ")"
+                                label = stripEmojis(data.Name) .. " (ID: " .. assetId .. ")"
                                 iconLabels[iconId] = label
                             end
                         end
@@ -213,7 +219,7 @@ local function getRewards(items)
                     elseif label == "Canes" then
                         canes = quantity
                     else
-                        table.insert(unknowns, label .. " | Qty: " .. quantity)
+                        table.insert(unknowns, stripEmojis(label) .. " | Qty: " .. quantity)
                     end
                 else
                     print("No Inner found in slot:", slot.Name)
