@@ -94,63 +94,6 @@ local iconLabels = {
 
 local lastSnapshot = ""
 
-local function waitForGui()
-    local gui = player:WaitForChild("PlayerGui")
-
-    local interface
-    repeat
-        interface = gui:FindFirstChild("Interface")
-        if not interface then task.wait(0.5) end
-    until interface
-
-    local rewards
-    repeat
-        rewards = interface:FindFirstChild("Rewards")
-        if not rewards then task.wait(0.5) end
-    until rewards
-
-    local main1
-    repeat
-        main1 = rewards:FindFirstChild("Main")
-        if not main1 then task.wait(0.5) end
-    until main1
-
-    local info
-    repeat
-        info = main1:FindFirstChild("Info")
-        if not info then task.wait(0.5) end
-    until info
-
-    local main2
-    repeat
-        main2 = info:FindFirstChild("Main")
-        if not main2 then task.wait(0.5) end
-    until main2
-
-    local items
-    repeat
-        items = main2:FindFirstChild("Items")
-        if not items then task.wait(0.5) end
-    until items
-
-    repeat
-        local hasSlot = false
-        for _, child in ipairs(items:GetChildren()) do
-            if child:IsA("Frame") then
-                hasSlot = true
-                break
-            end
-        end
-        if not hasSlot then
-            task.wait(0.5)
-        else
-            break
-        end
-    until false
-
-    return items
-end
-
 local function getRewards(items)
     local gold, xp, canes = "?", "?", "?"
     local unknowns = {}
@@ -206,22 +149,32 @@ end
 
 setupTeleportQueue()
 
-local items = waitForGui()
+local player = Players.LocalPlayer
+local gui = player:WaitForChild("PlayerGui")
+local interface = gui:WaitForChild("Interface")
+local rewards = interface:WaitForChild("Rewards")
+local main1 = rewards:WaitForChild("Main")
+local info = main1:WaitForChild("Info")
+local main2 = info:WaitForChild("Main")
+local items = main2:WaitForChild("Items")
 
-while true do
-    local ok, gold, xp, canes, unknowns = pcall(getRewards, items)
+-- Listen for when Rewards becomes visible
+rewards.Changed:Connect(function(prop)
+    if prop == "Visible" and rewards.Visible then
+        task.wait(0.5) -- small delay to let items populate
 
-    if ok then
-        local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
-        if unknowns then
-            snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
-        end
+        local ok, gold, xp, canes, unknowns = pcall(getRewards, items)
 
-        if snapshot ~= lastSnapshot then
-            lastSnapshot = snapshot
-            sendWebhook(gold, xp, canes, unknowns)
+        if ok then
+            local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
+            if unknowns then
+                snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
+            end
+
+            if snapshot ~= lastSnapshot then
+                lastSnapshot = snapshot
+                sendWebhook(gold, xp, canes, unknowns)
+            end
         end
     end
-
-    task.wait(5)
-end
+end)
