@@ -28,7 +28,7 @@ local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
         local lower = tostring(entry):lower()
-        if lower:find("serum") or lower:find("mythic") then
+        if lower:find("colossal serum") or lower:find("serum") then
             return true
         end
     end
