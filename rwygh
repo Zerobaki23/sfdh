@@ -1,9 +1,15 @@
 local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
-local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
+-- =============================================
+--   COLOSSAL SERUM COUNTER
+--   Sends drop data to your Flask server
+-- =============================================
 
+local FLASK_SERVER_URL = "http://YOUR_SERVER_IP:5000/api/serum"
+local FLASK_GOLD_URL   = "http://YOUR_SERVER_IP:5000/api/gold"
+
+local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
 local PING_USER_ID = "832942242498084888"
 
 local requestFunction =
@@ -24,6 +30,54 @@ local function setupTeleportQueue()
     end
 end
 
+-- =============================================
+--   SEND COUNT TO FLASK SERVER
+-- =============================================
+local function sendToFlask(count)
+    if not requestFunction then return end
+
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, {
+        count = count
+    })
+    if not ok then return end
+
+    local success, response = pcall(requestFunction, {
+        Url = FLASK_SERVER_URL,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = encoded
+    })
+
+    if success then
+        print("[Serum Counter] Sent count to Flask: +" .. count)
+    else
+        warn("[Serum Counter] Failed to reach Flask server: " .. tostring(response))
+    end
+end
+
+
+local function sendGoldToFlask(amount)
+    if not requestFunction then return end
+    local numAmount = tonumber(tostring(amount):gsub(",", "")) or 0
+    if numAmount <= 0 then return end
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, { amount = numAmount })
+    if not ok then return end
+    local success, response = pcall(requestFunction, {
+        Url = FLASK_GOLD_URL,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = encoded
+    })
+    if success then
+        print("[Gold Tracker] Sent gold to Flask: +" .. numAmount)
+    else
+        warn("[Gold Tracker] Failed to reach Flask server: " .. tostring(response))
+    end
+end
+
+-- =============================================
+--   DISCORD WEBHOOK
+-- =============================================
 local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
@@ -71,9 +125,7 @@ local function sendWebhook(gold, xp, canes, unknowns)
         url = gameLink,
         description = table.concat(descLines, "\n"),
         color = shouldPing and 15158332 or 5793266,
-        thumbnail = {
-            url = gameIconUrl,
-        },
+        thumbnail = { url = gameIconUrl },
         footer = {
             text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID,
         },
@@ -102,11 +154,14 @@ local function sendWebhook(gold, xp, canes, unknowns)
     task.wait(1)
 end
 
+-- =============================================
+--   REWARD PARSING
+-- =============================================
 local player = Players.LocalPlayer
 
 local iconLabels = {
-    ["rbxassetid://15296242924"] = "EXP",
-    ["rbxassetid://15147178963"] = "Gold",
+    ["rbxassetid://15296242924"]   = "EXP",
+    ["rbxassetid://15147178963"]   = "Gold",
     ["rbxassetid://138197199153705"] = "Canes",
 }
 
@@ -115,6 +170,7 @@ local lastSnapshot = ""
 local function getRewards(items)
     local gold, xp, canes = "?", "?", "?"
     local unknowns = {}
+    local serumCount = 0
 
     for _, slot in ipairs(items:GetChildren()) do
         if slot:IsA("Frame") then
@@ -156,15 +212,25 @@ local function getRewards(items)
                         canes = quantity
                     else
                         unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
+
+                        -- Check if this item is a Colossal Serum
+                        local lowerLabel = label:lower()
+                        if lowerLabel:find("colossal serum") or lowerLabel:find("serum") then
+                            local qty = tonumber(quantity) or 1
+                            serumCount = serumCount + qty
+                        end
                     end
                 end
             end
         end
     end
 
-    return gold, xp, canes, unknowns
+    return gold, xp, canes, unknowns, serumCount
 end
 
+-- =============================================
+--   MAIN LOOP
+-- =============================================
 setupTeleportQueue()
 
 local gui = player:WaitForChild("PlayerGui")
@@ -179,7 +245,7 @@ rewards.Changed:Connect(function(prop)
     if prop == "Visible" and rewards.Visible then
         task.wait(0.5)
 
-        local ok, gold, xp, canes, unknowns = pcall(getRewards, items)
+        local ok, gold, xp, canes, unknowns, serumCount = pcall(getRewards, items)
 
         if ok then
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
@@ -189,7 +255,17 @@ rewards.Changed:Connect(function(prop)
 
             if snapshot ~= lastSnapshot then
                 lastSnapshot = snapshot
+
+                -- Send to Discord
                 sendWebhook(gold, xp, canes, unknowns)
+
+                -- Send Colossal Serum count to Flask server
+                if serumCount > 0 then
+                    sendToFlask(serumCount)
+                end
+
+                -- Send gold to Flask server
+                sendGoldToFlask(gold)
             end
         end
     end
