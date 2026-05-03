@@ -55,19 +55,24 @@ local function sendToFlask(count)
     end
 end
 
-
 local function sendGoldToFlask(amount)
     if not requestFunction then return end
-    local numAmount = tonumber(tostring(amount):gsub(",", "")) or 0
+
+    -- Strip everything except digits and decimal points
+    local cleaned = tostring(amount):gsub("[^%d%.]+", "")
+    local numAmount = tonumber(cleaned) or 0
     if numAmount <= 0 then return end
+
     local ok, encoded = pcall(HttpService.JSONEncode, HttpService, { amount = numAmount })
     if not ok then return end
+
     local success, response = pcall(requestFunction, {
         Url = FLASK_GOLD_URL,
         Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
         Body = encoded
     })
+
     if success then
         print("[Gold Tracker] Sent gold to Flask: +" .. numAmount)
     else
@@ -213,7 +218,6 @@ local function getRewards(items)
                     else
                         unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
 
-                        -- Check if this item is a Colossal Serum
                         local lowerLabel = label:lower()
                         if lowerLabel:find("colossal serum") or lowerLabel:find("serum") then
                             local qty = tonumber(quantity) or 1
@@ -248,14 +252,12 @@ rewards.Changed:Connect(function(prop)
         local ok, gold, xp, canes, unknowns, serumCount = pcall(getRewards, items)
 
         if ok then
-            -- Always send gold + serum to Flask (no dedup, so every drop is counted)
             sendGoldToFlask(gold)
 
             if serumCount > 0 then
                 sendToFlask(serumCount)
             end
 
-            -- Only send Discord webhook if rewards actually changed (avoid spam)
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
             if unknowns and #unknowns > 0 then
                 snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
