@@ -40,29 +40,44 @@ local function sendWebhook(gold, xp, canes, unknowns)
 
     local shouldPing = checkForRareDrop(unknowns)
 
-    local description = string.format(
-        "Gold: %s\nXP: %s\nCanes: %s",
-        stripEmojis(gold),
-        stripEmojis(xp),
-        stripEmojis(canes)
-    )
+    local PLACE_ID = tostring(game.PlaceId)
+    local UNIVERSE_ID = tostring(game.GameId)
+    local gameIconUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. PLACE_ID .. "&width=150&height=150&format=png"
+    local gameLink = "https://www.roblox.com/games/" .. PLACE_ID
+
+    local descLines = {
+        "```",
+        string.format("%-8s %s", "GOLD", stripEmojis(gold)),
+        string.format("%-8s %s", "XP", stripEmojis(xp)),
+        string.format("%-8s %s", "CANES", stripEmojis(canes)),
+        "```",
+    }
 
     if unknowns and #unknowns > 0 then
-        local cleanLines = {}
+        descLines[#descLines + 1] = "**Others**"
+        descLines[#descLines + 1] = "```"
         for _, entry in ipairs(unknowns) do
-            cleanLines[#cleanLines + 1] = stripEmojis(tostring(entry))
+            descLines[#descLines + 1] = stripEmojis(tostring(entry))
         end
-        description = description .. "\n\nOthers:\n" .. table.concat(cleanLines, "\n")
+        descLines[#descLines + 1] = "```"
     end
 
     if shouldPing then
-        description = description .. "\n\nRARE DROP DETECTED!"
+        descLines[#descLines + 1] = ">>> RARE DROP DETECTED"
     end
 
     local embed = {
         title = "Rewards Update",
-        description = description,
-        color = shouldPing and 15158332 or 16766720,
+        url = gameLink,
+        description = table.concat(descLines, "\n"),
+        color = shouldPing and 15158332 or 5793266,
+        thumbnail = {
+            url = gameIconUrl,
+        },
+        footer = {
+            text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID,
+        },
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     }
 
     local payload = {
