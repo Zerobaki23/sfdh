@@ -248,6 +248,14 @@ rewards.Changed:Connect(function(prop)
         local ok, gold, xp, canes, unknowns, serumCount = pcall(getRewards, items)
 
         if ok then
+            -- Always send gold + serum to Flask (no dedup, so every drop is counted)
+            sendGoldToFlask(gold)
+
+            if serumCount > 0 then
+                sendToFlask(serumCount)
+            end
+
+            -- Only send Discord webhook if rewards actually changed (avoid spam)
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
             if unknowns and #unknowns > 0 then
                 snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
@@ -255,17 +263,7 @@ rewards.Changed:Connect(function(prop)
 
             if snapshot ~= lastSnapshot then
                 lastSnapshot = snapshot
-
-                -- Send to Discord
                 sendWebhook(gold, xp, canes, unknowns)
-
-                -- Send Colossal Serum count to Flask server
-                if serumCount > 0 then
-                    sendToFlask(serumCount)
-                end
-
-                -- Send gold to Flask server
-                sendGoldToFlask(gold)
             end
         end
     end
