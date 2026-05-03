@@ -8,7 +8,6 @@ local Players = game:GetService("Players")
 
 local FLASK_SERVER_URL = "http://192.168.100.175:5000/api/serum"
 local FLASK_GOLD_URL   = "http://192.168.100.175:5000/api/gold"
-local WS_URL           = "ws://192.168.100.175:5000/ws"
 
 local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
 local PING_USER_ID = "832942242498084888"
@@ -19,15 +18,6 @@ local requestFunction =
     http_request or
     request
 
--- =============================================
---   SCRIPT STATE (controlled via WebSocket)
--- =============================================
-local isRunning = true   -- false = stop sending data entirely
-local isPaused  = false  -- true  = skip reward processing but keep WS alive
-
--- =============================================
---   HELPERS
--- =============================================
 local function stripEmojis(str)
     return tostring(str):gsub("[^\32-\126]", "")
 end
@@ -44,9 +34,11 @@ end
 --   SEND COUNT TO FLASK SERVER
 -- =============================================
 local function sendToFlask(count)
-    if not requestFunction or not isRunning or isPaused then return end
+    if not requestFunction then return end
 
-    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, { count = count })
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, {
+        count = count
+    })
     if not ok then return end
 
     local success, response = pcall(requestFunction, {
@@ -63,107 +55,24 @@ local function sendToFlask(count)
     end
 end
 
+
 local function sendGoldToFlask(amount)
-    if not requestFunction or not isRunning or isPaused then return end
-
-    local cleaned = tostring(amount):gsub("[^%d%.]+", "")
-    local numAmount = tonumber(cleaned) or 0
+    if not requestFunction then return end
+    local numAmount = tonumber(tostring(amount):gsub(",", "")) or 0
     if numAmount <= 0 then return end
-
     local ok, encoded = pcall(HttpService.JSONEncode, HttpService, { amount = numAmount })
     if not ok then return end
-
     local success, response = pcall(requestFunction, {
         Url = FLASK_GOLD_URL,
         Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
         Body = encoded
     })
-
     if success then
         print("[Gold Tracker] Sent gold to Flask: +" .. numAmount)
     else
         warn("[Gold Tracker] Failed to reach Flask server: " .. tostring(response))
     end
-end
-
--- =============================================
---   COMMAND HANDLER
--- =============================================
-local function handleCommand(cmd)
-    cmd = tostring(cmd):lower():gsub("%s+", "")
-
-    if cmd == "stop" then
-        isRunning = false
-        isPaused  = false
-        print("[WS] Command received: STOP — halting all sends")
-
-    elseif cmd == "start" then
-        isRunning = true
-        isPaused  = false
-        print("[WS] Command received: START — resuming")
-
-    elseif cmd == "pause" then
-        isPaused = true
-        print("[WS] Command received: PAUSE — pausing reward sends")
-
-    elseif cmd == "reset_counter" then
-        print("[WS] Command received: RESET COUNTER")
-        -- Nothing to reset locally; server handles its own totals
-
-    else
-        print("[WS] Unknown command: " .. cmd)
-    end
-end
-
--- =============================================
---   WEBSOCKET LISTENER (runs in background)
--- =============================================
-local wsLib = (syn and syn.websocket) or WebSocket
-
-local function startWebSocket()
-    if not wsLib then
-        warn("[WS] WebSocket not supported by this executor. Skipping.")
-        return
-    end
-
-    task.spawn(function()
-        while true do
-            local ok, ws = pcall(wsLib.connect, WS_URL)
-            if ok and ws then
-                print("[WS] Connected to Flask server at " .. WS_URL)
-
-                ws.OnMessage:Connect(function(raw)
-                    local parseOk, data = pcall(HttpService.JSONDecode, HttpService, raw)
-                    if parseOk and data then
-                        if data.type == "command" and data.command then
-                            handleCommand(data.command)
-                        end
-                    else
-                        -- Try treating it as a plain command string
-                        handleCommand(raw)
-                    end
-                end)
-
-                ws.OnClose:Connect(function()
-                    print("[WS] Connection closed. Reconnecting in 5s...")
-                end)
-
-                -- Keep this thread alive while WS is open
-                -- OnClose fires when it drops, so we just yield here
-                while ws do
-                    task.wait(1)
-                    -- Try sending a heartbeat ping; if it errors the socket dropped
-                    local pingOk = pcall(function() ws:Send("ping") end)
-                    if not pingOk then break end
-                end
-            else
-                warn("[WS] Could not connect: " .. tostring(ws) .. " — retrying in 5s")
-            end
-
-            task.wait(5)
-        end
-    end)
 end
 
 -- =============================================
@@ -181,19 +90,19 @@ local function checkForRareDrop(unknowns)
 end
 
 local function sendWebhook(gold, xp, canes, unknowns)
-    if not requestFunction or not isRunning or isPaused then return end
+    if not requestFunction then return end
 
     local shouldPing = checkForRareDrop(unknowns)
 
-    local PLACE_ID    = tostring(game.PlaceId)
+    local PLACE_ID = tostring(game.PlaceId)
     local UNIVERSE_ID = tostring(game.GameId)
     local gameIconUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. PLACE_ID .. "&width=150&height=150&format=png"
-    local gameLink    = "https://www.roblox.com/games/" .. PLACE_ID
+    local gameLink = "https://www.roblox.com/games/" .. PLACE_ID
 
     local descLines = {
         "```",
-        string.format("%-8s %s", "GOLD",  stripEmojis(gold)),
-        string.format("%-8s %s", "XP",    stripEmojis(xp)),
+        string.format("%-8s %s", "GOLD", stripEmojis(gold)),
+        string.format("%-8s %s", "XP", stripEmojis(xp)),
         string.format("%-8s %s", "CANES", stripEmojis(canes)),
         "```",
     }
@@ -212,18 +121,20 @@ local function sendWebhook(gold, xp, canes, unknowns)
     end
 
     local embed = {
-        title       = "Rewards Update",
-        url         = gameLink,
+        title = "Rewards Update",
+        url = gameLink,
         description = table.concat(descLines, "\n"),
-        color       = shouldPing and 15158332 or 5793266,
-        thumbnail   = { url = gameIconUrl },
-        footer      = { text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID },
-        timestamp   = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        color = shouldPing and 15158332 or 5793266,
+        thumbnail = { url = gameIconUrl },
+        footer = {
+            text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID,
+        },
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     }
 
     local payload = {
         username = "Wesh the diddler",
-        embeds   = { embed },
+        embeds = { embed },
     }
 
     if shouldPing then
@@ -234,10 +145,10 @@ local function sendWebhook(gold, xp, canes, unknowns)
     if not ok then return end
 
     pcall(requestFunction, {
-        Url     = webhookUrl,
-        Method  = "POST",
+        Url = webhookUrl,
+        Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
-        Body    = encoded
+        Body = encoded
     })
 
     task.wait(1)
@@ -249,8 +160,8 @@ end
 local player = Players.LocalPlayer
 
 local iconLabels = {
-    ["rbxassetid://15296242924"]     = "EXP",
-    ["rbxassetid://15147178963"]     = "Gold",
+    ["rbxassetid://15296242924"]   = "EXP",
+    ["rbxassetid://15147178963"]   = "Gold",
     ["rbxassetid://138197199153705"] = "Canes",
 }
 
@@ -268,19 +179,20 @@ local function getRewards(items)
                 local inner = main:FindFirstChild("Inner")
                 if inner then
                     local quantityLabel = inner:FindFirstChild("Quantity")
-                    local icon          = inner:FindFirstChild("Icon")
+                    local icon = inner:FindFirstChild("Icon")
 
                     local quantity = quantityLabel and tostring(quantityLabel.Text) or "?"
-                    local iconId   = icon and tostring(icon.Image) or "?"
-                    local label    = iconLabels[iconId]
+                    local iconId = icon and tostring(icon.Image) or "?"
+
+                    local label = iconLabels[iconId]
 
                     if not label then
                         local assetId = iconId:match("rbxassetid://(%d+)") or iconId:match("id=(%d+)") or iconId
                         label = "Unknown"
 
                         local ok, response = pcall(requestFunction, {
-                            Url     = "https://economy.roblox.com/v2/assets/" .. assetId .. "/details",
-                            Method  = "GET",
+                            Url = "https://economy.roblox.com/v2/assets/" .. assetId .. "/details",
+                            Method = "GET",
                             Headers = { ["Content-Type"] = "application/json" }
                         })
                         if ok and response and response.StatusCode == 200 then
@@ -301,6 +213,7 @@ local function getRewards(items)
                     else
                         unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
 
+                        -- Check if this item is a Colossal Serum
                         local lowerLabel = label:lower()
                         if lowerLabel:find("colossal serum") or lowerLabel:find("serum") then
                             local qty = tonumber(quantity) or 1
@@ -316,9 +229,42 @@ local function getRewards(items)
 end
 
 -- =============================================
---   MAIN
+--   MAIN LOOP
 -- =============================================
 setupTeleportQueue()
-startWebSocket()  -- Start WS listener in background
 
-local gui       = player:WaitForChild("PlayerG
+local gui = player:WaitForChild("PlayerGui")
+local interface = gui:WaitForChild("Interface")
+local rewards = interface:WaitForChild("Rewards")
+local main1 = rewards:WaitForChild("Main")
+local info = main1:WaitForChild("Info")
+local main2 = info:WaitForChild("Main")
+local items = main2:WaitForChild("Items")
+
+rewards.Changed:Connect(function(prop)
+    if prop == "Visible" and rewards.Visible then
+        task.wait(0.5)
+
+        local ok, gold, xp, canes, unknowns, serumCount = pcall(getRewards, items)
+
+        if ok then
+            -- Always send gold + serum to Flask (no dedup, so every drop is counted)
+            sendGoldToFlask(gold)
+
+            if serumCount > 0 then
+                sendToFlask(serumCount)
+            end
+
+            -- Only send Discord webhook if rewards actually changed (avoid spam)
+            local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
+            if unknowns and #unknowns > 0 then
+                snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
+            end
+
+            if snapshot ~= lastSnapshot then
+                lastSnapshot = snapshot
+                sendWebhook(gold, xp, canes, unknowns)
+            end
+        end
+    end
+end)
