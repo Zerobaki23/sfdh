@@ -1,11 +1,6 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
--- =============================================
---   COLOSSAL SERUM COUNTER
---   Sends drop data to your Flask server
--- =============================================
-
 local FLASK_SERVER_URL = "http://192.168.100.175:5000/api/serum"
 local FLASK_GOLD_URL   = "http://192.168.100.175:5000/api/gold"
 
@@ -18,6 +13,9 @@ local requestFunction =
     http_request or
     request
 
+-- =============================================
+--   HELPERS
+-- =============================================
 local function stripEmojis(str)
     return tostring(str):gsub("[^\32-\126]", "")
 end
@@ -30,22 +28,39 @@ local function setupTeleportQueue()
     end
 end
 
+-- Parses Roblox UI numbers: "405,221" / "1.2M" / "5K" / "123" → integer
+local function parseRobloxNumber(str)
+    if not str then return 0 end
+    local s = tostring(str):gsub("%s+", "")
+
+    -- Handle K / M / B / T suffixes
+    local suffixes = { K = 1e3, M = 1e6, B = 1e9, T = 1e12 }
+    local num, suffix = s:match("^([%d%.]+)([KkMmBbTt])$")
+    if num and suffix then
+        local mult = suffixes[suffix:upper()]
+        return math.floor((tonumber(num) or 0) * mult)
+    end
+
+    -- Plain number, strip commas and any stray non-digit chars
+    local cleaned = s:gsub(",", ""):gsub("[^%d]", "")
+    if cleaned == "" then return 0 end
+    return tonumber(cleaned) or 0
+end
+
 -- =============================================
---   SEND COUNT TO FLASK SERVER
+--   SEND SERUM TO FLASK
 -- =============================================
 local function sendToFlask(count)
     if not requestFunction then return end
 
-    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, {
-        count = count
-    })
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, { count = count })
     if not ok then return end
 
     local success, response = pcall(requestFunction, {
-        Url = FLASK_SERVER_URL,
+        Url    = FLASK_SERVER_URL,
         Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
-        Body = encoded
+        Body   = encoded
     })
 
     if success then
@@ -55,19 +70,31 @@ local function sendToFlask(count)
     end
 end
 
-
+-- =============================================
+--   SEND GOLD TO FLASK
+-- =============================================
 local function sendGoldToFlask(amount)
     if not requestFunction then return end
-    local numAmount = tonumber(tostring(amount):gsub(",", "")) or 0
-    if numAmount <= 0 then return end
+
+    -- Debug: print raw value so you can see exactly what the UI gives us
+    print("[Gold Tracker] Raw UI value: " .. tostring(amount))
+
+    local numAmount = parseRobloxNumber(amount)
+    if numAmount <= 0 then
+        warn("[Gold Tracker] Skipping non-positive gold value: " .. tostring(amount))
+        return
+    end
+
     local ok, encoded = pcall(HttpService.JSONEncode, HttpService, { amount = numAmount })
     if not ok then return end
+
     local success, response = pcall(requestFunction, {
-        Url = FLASK_GOLD_URL,
+        Url    = FLASK_GOLD_URL,
         Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
-        Body = encoded
+        Body   = encoded
     })
+
     if success then
         print("[Gold Tracker] Sent gold to Flask: +" .. numAmount)
     else
@@ -94,15 +121,15 @@ local function sendWebhook(gold, xp, canes, unknowns)
 
     local shouldPing = checkForRareDrop(unknowns)
 
-    local PLACE_ID = tostring(game.PlaceId)
+    local PLACE_ID    = tostring(game.PlaceId)
     local UNIVERSE_ID = tostring(game.GameId)
     local gameIconUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. PLACE_ID .. "&width=150&height=150&format=png"
-    local gameLink = "https://www.roblox.com/games/" .. PLACE_ID
+    local gameLink    = "https://www.roblox.com/games/" .. PLACE_ID
 
     local descLines = {
         "```",
-        string.format("%-8s %s", "GOLD", stripEmojis(gold)),
-        string.format("%-8s %s", "XP", stripEmojis(xp)),
+        string.format("%-8s %s", "GOLD",  stripEmojis(gold)),
+        string.format("%-8s %s", "XP",    stripEmojis(xp)),
         string.format("%-8s %s", "CANES", stripEmojis(canes)),
         "```",
     }
@@ -121,20 +148,18 @@ local function sendWebhook(gold, xp, canes, unknowns)
     end
 
     local embed = {
-        title = "Rewards Update",
-        url = gameLink,
+        title       = "Rewards Update",
+        url         = gameLink,
         description = table.concat(descLines, "\n"),
-        color = shouldPing and 15158332 or 5793266,
-        thumbnail = { url = gameIconUrl },
-        footer = {
-            text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID,
-        },
-        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        color       = shouldPing and 15158332 or 5793266,
+        thumbnail   = { url = gameIconUrl },
+        footer      = { text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID },
+        timestamp   = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     }
 
     local payload = {
         username = "Wesh the diddler",
-        embeds = { embed },
+        embeds   = { embed },
     }
 
     if shouldPing then
@@ -145,10 +170,10 @@ local function sendWebhook(gold, xp, canes, unknowns)
     if not ok then return end
 
     pcall(requestFunction, {
-        Url = webhookUrl,
-        Method = "POST",
+        Url     = webhookUrl,
+        Method  = "POST",
         Headers = { ["Content-Type"] = "application/json" },
-        Body = encoded
+        Body    = encoded
     })
 
     task.wait(1)
@@ -160,8 +185,8 @@ end
 local player = Players.LocalPlayer
 
 local iconLabels = {
-    ["rbxassetid://15296242924"]   = "EXP",
-    ["rbxassetid://15147178963"]   = "Gold",
+    ["rbxassetid://15296242924"]     = "EXP",
+    ["rbxassetid://15147178963"]     = "Gold",
     ["rbxassetid://138197199153705"] = "Canes",
 }
 
@@ -179,20 +204,19 @@ local function getRewards(items)
                 local inner = main:FindFirstChild("Inner")
                 if inner then
                     local quantityLabel = inner:FindFirstChild("Quantity")
-                    local icon = inner:FindFirstChild("Icon")
+                    local icon          = inner:FindFirstChild("Icon")
 
                     local quantity = quantityLabel and tostring(quantityLabel.Text) or "?"
-                    local iconId = icon and tostring(icon.Image) or "?"
-
-                    local label = iconLabels[iconId]
+                    local iconId   = icon and tostring(icon.Image) or "?"
+                    local label    = iconLabels[iconId]
 
                     if not label then
                         local assetId = iconId:match("rbxassetid://(%d+)") or iconId:match("id=(%d+)") or iconId
                         label = "Unknown"
 
                         local ok, response = pcall(requestFunction, {
-                            Url = "https://economy.roblox.com/v2/assets/" .. assetId .. "/details",
-                            Method = "GET",
+                            Url     = "https://economy.roblox.com/v2/assets/" .. assetId .. "/details",
+                            Method  = "GET",
                             Headers = { ["Content-Type"] = "application/json" }
                         })
                         if ok and response and response.StatusCode == 200 then
@@ -213,11 +237,10 @@ local function getRewards(items)
                     else
                         unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
 
-                        -- Check if this item is a Colossal Serum
                         local lowerLabel = label:lower()
                         if lowerLabel:find("colossal serum") or lowerLabel:find("serum") then
-                            local qty = tonumber(quantity) or 1
-                            serumCount = serumCount + qty
+                            local qty = parseRobloxNumber(quantity)
+                            serumCount = serumCount + (qty > 0 and qty or 1)
                         end
                     end
                 end
@@ -229,17 +252,17 @@ local function getRewards(items)
 end
 
 -- =============================================
---   MAIN LOOP
+--   MAIN
 -- =============================================
 setupTeleportQueue()
 
-local gui = player:WaitForChild("PlayerGui")
+local gui       = player:WaitForChild("PlayerGui")
 local interface = gui:WaitForChild("Interface")
-local rewards = interface:WaitForChild("Rewards")
-local main1 = rewards:WaitForChild("Main")
-local info = main1:WaitForChild("Info")
-local main2 = info:WaitForChild("Main")
-local items = main2:WaitForChild("Items")
+local rewards   = interface:WaitForChild("Rewards")
+local main1     = rewards:WaitForChild("Main")
+local info      = main1:WaitForChild("Info")
+local main2     = info:WaitForChild("Main")
+local items     = main2:WaitForChild("Items")
 
 rewards.Changed:Connect(function(prop)
     if prop == "Visible" and rewards.Visible then
@@ -248,14 +271,12 @@ rewards.Changed:Connect(function(prop)
         local ok, gold, xp, canes, unknowns, serumCount = pcall(getRewards, items)
 
         if ok then
-            -- Always send gold + serum to Flask (no dedup, so every drop is counted)
             sendGoldToFlask(gold)
 
             if serumCount > 0 then
                 sendToFlask(serumCount)
             end
 
-            -- Only send Discord webhook if rewards actually changed (avoid spam)
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
             if unknowns and #unknowns > 0 then
                 snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
