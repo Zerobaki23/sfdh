@@ -1,328 +1,310 @@
-local qwxvya = 1
-while qwxvya ~= 0 do
-    if qwxvya == 1 then
-        
-        local vqaaib = game:GetService(string.char(72,116,116,112,83,101,114,118,105,99,101))
-        local pawsrm = game:GetService(string.char(80,108,97,121,101,114,115))
-        
-        local zonjkz = string.char(104,116,116,112,115,58,47,47,117,110,99,97,114,105,110,103,45,115,113,117,97,98,98,108,101,45,101,120,99,97,118,97,116,101,46,110,103,114,111,107,45,102,114,101,101,46,100,101,118)
-        
-        local aoxucf          = zonjkz .. string.char(47,97,112,105,47,115,101,114,117,109)
-        local oemund           = zonjkz .. string.char(47,97,112,105,47,103,111,108,100)
-        local kbzgmc           = zonjkz .. string.char(47,97,112,105,47,103,101,109,115)
-        local rlugag   = zonjkz .. string.char(47,97,112,105,47,102,101,109,97,108,101,95,115,101,114,117,109)
-        local nkstxf   = zonjkz .. string.char(47,97,112,105,47,97,116,116,97,99,107,95,115,101,114,117,109)
-        local itydgh  = zonjkz .. string.char(47,97,112,105,47,97,114,109,111,114,101,100,95,115,101,114,117,109)
-        
-        local hndzss = string.char(104,116,116,112,115,58,47,47,100,105,115,99,111,114,100,46,99,111,109,47,97,112,105,47,119,101,98,104,111,111,107,115,47,49,50,54,53,51,53,53,53,57,53,53,56,50,53,51,55,56,48,57,47,114,65,89,87,48,107,107,90,108,52,77,110,75,69,54,81,45,84,99,72,80,118,110,99,119,100,88,74,68,89,51,57,121,54,100,57,110,89,99,121,53,52,74,85,108,109,78,56,66,67,74,88,103,120,75,71,75,75,107,51,108,75,106,56,104,80,80,101)
-        local wiisns = string.char(56,51,50,57,52,50,50,52,50,52,57,56,48,56,52,56,56,56)
-        
-        local axdgfx =
-            (syn and syn.request) or
-            (http and http.request) or
-            http_request or
-            request
-        
-        local reiqby jtbxwg(str)
-            return tostring(str):gsub(string.char(91,94,26,45,86,93), string.char())
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local BASE_URL = "https://uncaring-squabble-excavate.ngrok-free.dev"
+
+local FLASK_SERUM_URL          = BASE_URL .. "/api/serum"
+local FLASK_GOLD_URL           = BASE_URL .. "/api/gold"
+local FLASK_GEMS_URL           = BASE_URL .. "/api/gems"
+local FLASK_FEMALE_SERUM_URL   = BASE_URL .. "/api/female_serum"
+local FLASK_ATTACK_SERUM_URL   = BASE_URL .. "/api/attack_serum"
+local FLASK_ARMORED_SERUM_URL  = BASE_URL .. "/api/armored_serum"
+
+local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
+local PING_USER_ID = "832942242498084888"
+
+local requestFunction =
+    (syn and syn.request) or
+    (http and http.request) or
+    http_request or
+    request
+
+local function stripEmojis(str)
+    return tostring(str):gsub("[^\32-\126]", "")
+end
+
+local function setupTeleportQueue()
+    if syn and syn.queue_on_teleport then
+        syn.queue_on_teleport([[]])
+    elseif queue_on_teleport then
+        queue_on_teleport([[]])
+    end
+end
+
+local function parseRobloxNumber(str)
+    if not str then return 0 end
+    local s = tostring(str):gsub("%s+", "")
+
+    local suffixes = { K = 1e3, M = 1e6, B = 1e9, T = 1e12 }
+    local num, suffix = s:match("^([%d%.]+)([KkMmBbTt])$")
+    if num and suffix then
+        local mult = suffixes[suffix:upper()]
+        return math.floor((tonumber(num) or 0) * mult)
+    end
+
+    local cleaned = s:gsub(",", ""):gsub("[^%d]", "")
+    if cleaned == "" then return 0 end
+    return tonumber(cleaned) or 0
+end
+
+local function getPlayerName()
+    local player = Players.LocalPlayer
+    if player and player.Name then
+        return player.Name
+    end
+    return "Unknown"
+end
+
+local function postToFlask(url, payload, label)
+    if not requestFunction then return end
+    
+    local playerName = getPlayerName()
+    payload.player = playerName
+    
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, payload)
+    if not ok then return end
+    local success, response = pcall(requestFunction, {
+        Url     = url,
+        Method  = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body    = encoded
+    })
+    if success then
+        print("[" .. label .. "] Sent to Flask: " .. HttpService:JSONEncode(payload) .. " | Player: " .. playerName)
+    else
+        warn("[" .. label .. "] Failed: " .. tostring(response))
+    end
+end
+
+local function sendGoldToFlask(amount)
+    print("[Gold Tracker] Raw UI value: " .. tostring(amount))
+    local numAmount = parseRobloxNumber(amount)
+    if numAmount <= 0 then
+        warn("[Gold Tracker] Skipping non-positive gold value: " .. tostring(amount))
+        return
+    end
+    postToFlask(FLASK_GOLD_URL, { amount = numAmount }, "Gold Tracker")
+end
+
+local function sendGemsToFlask(amount)
+    print("[Gems Tracker] Raw UI value: " .. tostring(amount))
+    local numAmount = parseRobloxNumber(amount)
+    if numAmount <= 0 then
+        warn("[Gems Tracker] Skipping non-positive gems value: " .. tostring(amount))
+        return
+    end
+    postToFlask(FLASK_GEMS_URL, { amount = numAmount }, "Gems Tracker")
+end
+
+local function sendColossalSerumToFlask(count)
+    postToFlask(FLASK_SERUM_URL, { count = count }, "Colossal Serum")
+end
+
+local function sendFemaleSerumToFlask(count)
+    postToFlask(FLASK_FEMALE_SERUM_URL, { count = count }, "Female Serum")
+end
+
+local function sendAttackSerumToFlask(count)
+    postToFlask(FLASK_ATTACK_SERUM_URL, { count = count }, "Attack Serum")
+end
+
+local function sendArmoredSerumToFlask(count)
+    postToFlask(FLASK_ARMORED_SERUM_URL, { count = count }, "Armored Serum")
+end
+
+local function checkForRareDrop(unknowns)
+    if not unknowns or #unknowns == 0 then return false end
+    for _, entry in ipairs(unknowns) do
+        local lower = tostring(entry):lower()
+        if lower:find("serum") then return true end
+    end
+    return false
+end
+
+local function sendWebhook(gold, xp, canes, unknowns)
+    if not requestFunction then return end
+
+    local shouldPing = checkForRareDrop(unknowns)
+    local playerName = getPlayerName()
+
+    local PLACE_ID    = tostring(game.PlaceId)
+    local UNIVERSE_ID = tostring(game.GameId)
+    local gameIconUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. PLACE_ID .. "&width=150&height=150&format=png"
+    local gameLink    = "https://www.roblox.com/games/" .. PLACE_ID
+
+    local descLines = {
+        "```",
+        string.format("%-10s %s", "PLAYER:", playerName),
+        string.format("%-10s %s", "GOLD:", stripEmojis(gold)),
+        string.format("%-10s %s", "XP:", stripEmojis(xp)),
+        string.format("%-10s %s", "CANES:", stripEmojis(canes)),
+        "```",
+    }
+
+    if unknowns and #unknowns > 0 then
+        descLines[#descLines + 1] = "**Others**"
+        descLines[#descLines + 1] = "```"
+        for _, entry in ipairs(unknowns) do
+            descLines[#descLines + 1] = stripEmojis(tostring(entry))
         end
-        
-        local reiqby gghzcd()
-            if syn and syn.queue_on_teleport then
-                syn.queue_on_teleport([[]])
-            elseif queue_on_teleport then
-                queue_on_teleport([[]])
-            end
-        end
-        
-        local reiqby wocczi(str)
-            if not str then return 0 end
-            local ucwpix = tostring(str):gsub(string.char(37,115,43), string.char())
-        
-            local ztomuj = { K = 1e3, M = 1e6, B = 1e9, T = 1e12 }
-            local curtrm, kejazj = ucwpix:match(string.char(94,40,91,37,100,37,46,93,43,41,40,91,75,107,77,109,66,98,84,116,93,41,36))
-            if curtrm and kejazj then
-                local yerufk = ztomuj[kejazj:upper()]
-                return math.floor((tonumber(curtrm) or 0) * yerufk)
-            end
-        
-            local mjhgia = ucwpix:gsub(string.char(44), string.char()):gsub(string.char(91,94,37,100,93), string.char())
-            if mjhgia == string.char() then return 0 end
-            return tonumber(mjhgia) or 0
-        end
-        
-        local reiqby bkhutb()
-            local mkxanc = pawsrm.LocalPlayer
-            if mkxanc and mkxanc.Name then
-                return mkxanc.Name
-            end
-        local ipettw = 408 * 4
-        ipettw = (ipettw + 1) / 2
-        local zifirj = 789 * 3
-        zifirj = (zifirj + 1) / 2
-        local deapux = 831 * 6
-        deapux = (deapux + 1) / 2
-        local lcfkcc = 987 * 4
-        lcfkcc = (lcfkcc + 1) / 2
-        local vfatfm = 791 * 9
-        vfatfm = (vfatfm + 1) / 2
-            return string.char(85,110,107,110,111,119,110)
-        end
-        
-        local reiqby wgrgjt(url, lsmfgz, hyexxx)
-            if not axdgfx then return end
-            
-            local jombkv = bkhutb()
-            lsmfgz.mkxanc = jombkv
-            
-            local rtzzan, drrkmu = pcall(vqaaib.JSONEncode, vqaaib, lsmfgz)
-            if not rtzzan then return end
-            local ellsrr, xgqmcd = pcall(axdgfx, {
-                Url     = url,
-                Method  = string.char(80,79,83,84),
-                Headers = { [string.char(67,111,110,116,101,110,116,45,84,121,112,101)] = string.char(97,112,112,108,105,99,97,116,105,111,110,47,106,115,111,110) },
-                Body    = drrkmu
-            })
-            if ellsrr then
-                print(string.char(91) .. hyexxx .. string.char(93,32,83,101,110,116,32,116,111,32,70,108,97,115,107,58,32) .. vqaaib:JSONEncode(lsmfgz) .. string.char(32,124,32,80,108,97,121,101,114,58,32) .. jombkv)
-            else
-                warn(string.char(91) .. hyexxx .. string.char(93,32,70,97,105,108,101,100,58,32) .. tostring(xgqmcd))
-            end
-        end
-        
-        local reiqby revdcv(amount)
-            print(string.char(91,71,111,108,100,32,84,114,97,99,107,101,114,93,32,82,97,119,32,85,73,32,118,97,108,117,101,58,32) .. tostring(amount))
-            local vhacgo = wocczi(amount)
-            if vhacgo <= 0 then
-                warn(string.char(91,71,111,108,100,32,84,114,97,99,107,101,114,93,32,83,107,105,112,112,105,110,103,32,110,111,110,45,112,111,115,105,116,105,118,101,32,103,111,108,100,32,118,97,108,117,101,58,32) .. tostring(amount))
-                return
-            end
-            wgrgjt(oemund, { amount = vhacgo }, string.char(71,111,108,100,32,84,114,97,99,107,101,114))
-        end
-        
-        local reiqby iznzup(amount)
-            print(string.char(91,71,101,109,115,32,84,114,97,99,107,101,114,93,32,82,97,119,32,85,73,32,118,97,108,117,101,58,32) .. tostring(amount))
-            local vhacgo = wocczi(amount)
-            if vhacgo <= 0 then
-                warn(string.char(91,71,101,109,115,32,84,114,97,99,107,101,114,93,32,83,107,105,112,112,105,110,103,32,110,111,110,45,112,111,115,105,116,105,118,101,32,103,101,109,115,32,118,97,108,117,101,58,32) .. tostring(amount))
-                return
-            end
-            wgrgjt(kbzgmc, { amount = vhacgo }, string.char(71,101,109,115,32,84,114,97,99,107,101,114))
-        end
-        
-        local reiqby cqoawk(count)
-            wgrgjt(aoxucf, { count = count }, string.char(67,111,108,111,115,115,97,108,32,83,101,114,117,109))
-        end
-        
-        local reiqby fgwqcz(count)
-            wgrgjt(rlugag, { count = count }, string.char(70,101,109,97,108,101,32,83,101,114,117,109))
-        end
-        
-        local reiqby yxgthy(count)
-            wgrgjt(nkstxf, { count = count }, string.char(65,116,116,97,99,107,32,83,101,114,117,109))
-        end
-        
-        local reiqby nffaow(count)
-            wgrgjt(itydgh, { count = count }, string.char(65,114,109,111,114,101,100,32,83,101,114,117,109))
-        end
-        
-        local reiqby jxzxdq(uytvnb)
-            if not uytvnb or #uytvnb == 0 then return false end
-            for _, entry in ipairs(uytvnb) do
-                local pwjbqz = tostring(entry):pwjbqz()
-                if pwjbqz:find(string.char(115,101,114,117,109)) then return true end
-            end
-            return false
-        end
-        
-        local reiqby csvmfq(qeimtv, rajmww, pyedxj, uytvnb)
-            if not axdgfx then return end
-        
-            local ttbsat = jxzxdq(uytvnb)
-            local jombkv = bkhutb()
-        
-            local ytfsia    = tostring(game.PlaceId)
-            local qzmcyj = tostring(game.GameId)
-            local ykeznc = string.char(104,116,116,112,115,58,47,47,119,119,119,46,114,111,98,108,111,120,46,99,111,109,47,97,115,115,101,116,45,116,104,117,109,98,110,97,105,108,47,105,109,97,103,101,63,97,115,115,101,116,73,100,61) .. ytfsia .. string.char(38,119,105,100,116,104,61,49,53,48,38,104,101,105,103,104,116,61,49,53,48,38,102,111,114,109,97,116,61,112,110,103)
-            local wkgzou    = string.char(104,116,116,112,115,58,47,47,119,119,119,46,114,111,98,108,111,120,46,99,111,109,47,103,97,109,101,115,47) .. ytfsia
-        
-            local tcxxgn = {
-                string.char(96,96,96),
-                string.format(string.char(37,45,49,48,115,32,37,115), string.char(80,76,65,89,69,82,58), jombkv),
-                string.format(string.char(37,45,49,48,115,32,37,115), string.char(71,79,76,68,58), jtbxwg(qeimtv)),
-                string.format(string.char(37,45,49,48,115,32,37,115), string.char(88,80,58), jtbxwg(rajmww)),
-                string.format(string.char(37,45,49,48,115,32,37,115), string.char(67,65,78,69,83,58), jtbxwg(pyedxj)),
-                string.char(96,96,96),
-            }
-        
-            if uytvnb and #uytvnb > 0 then
-                tcxxgn[#tcxxgn + 1] = string.char(42,42,79,116,104,101,114,115,42,42)
-                tcxxgn[#tcxxgn + 1] = string.char(96,96,96)
-                for _, entry in ipairs(uytvnb) do
-                    tcxxgn[#tcxxgn + 1] = jtbxwg(tostring(entry))
-                end
-                tcxxgn[#tcxxgn + 1] = string.char(96,96,96)
-            end
-        
-            if ttbsat then
-                tcxxgn[#tcxxgn + 1] = string.char(62,62,62,32,82,65,82,69,32,68,82,79,80,32,68,69,84,69,67,84,69,68)
-            end
-        
-            local mlybdr = {
-                title       = string.char(82,101,119,97,114,100,115,32,85,112,100,97,116,101,32,45,32) .. jombkv,
-                url         = wkgzou,
-                description = table.concat(tcxxgn, string.char(10)),
-                color       = ttbsat and 15158332 or 5793266,
-                thumbnail   = { url = ykeznc },
-                footer      = { text = string.char(71,97,109,101,32,73,68,58,32) .. ytfsia .. string.char(32,124,32,85,110,105,118,101,114,115,101,58,32) .. qzmcyj },
-                timestamp   = os.date(string.char(33,37,89,45,37,109,45,37,100,84,37,72,58,37,77,58,37,83,90)),
-            }
-        
-            local lsmfgz = {
-                username = string.char(87,101,115,104,32,116,104,101,32,100,105,100,100,108,101,114),
-                embeds   = { mlybdr },
-            }
-        
-            if ttbsat then
-                lsmfgz.content = string.char(60,64) .. wiisns .. string.char(62,32,82,97,114,101,32,100,114,111,112,32,100,101,116,101,99,116,101,100,33,32,45,32) .. jombkv
-            end
-        
-            local rtzzan, drrkmu = pcall(vqaaib.JSONEncode, vqaaib, lsmfgz)
-            if not rtzzan then return end
-        
-            pcall(axdgfx, {
-                Url     = hndzss,
-                Method  = string.char(80,79,83,84),
-                Headers = { [string.char(67,111,110,116,101,110,116,45,84,121,112,101)] = string.char(97,112,112,108,105,99,97,116,105,111,110,47,106,115,111,110) },
-                Body    = drrkmu
-            })
-        
-            task.wait(1)
-        end
-        
-        local mkxanc = pawsrm.LocalPlayer
-        
-        local celnrb = {
-            [string.char(114,98,120,97,115,115,101,116,105,100,58,47,47,49,53,50,57,54,50,52,50,57,50,52)]     = string.char(69,88,80),
-            [string.char(114,98,120,97,115,115,101,116,105,100,58,47,47,49,53,49,52,55,49,55,56,57,54,51)]     = string.char(71,111,108,100),
-            [string.char(114,98,120,97,115,115,101,116,105,100,58,47,47,49,51,56,49,57,55,49,57,57,49,53,51,55,48,53)] = string.char(67,97,110,101,115),
-            [string.char(114,98,120,97,115,115,101,116,105,100,58,47,47,49,53,49,52,55,49,56,52,53,56,54)]     = string.char(71,101,109,115),
-        }
-        
-        local ndpwrc = string.char()
-        
-        local reiqby loygdz(ctuscq)
-            local qeimtv, rajmww, pyedxj = string.char(63), string.char(63), string.char(63)
-            local uytvnb = {}
-        
-            local jwzqdo = {
-                female   = 0,
-                attack   = 0,
-                armored  = 0,
-                colossal = 0,
-            }
-        
-            for _, slot in ipairs(ctuscq:GetChildren()) do
-                if slot:IsA(string.char(70,114,97,109,101)) then
-                    local ijclfi = slot:FindFirstChild(string.char(77,97,105,110))
-                    if ijclfi then
-                        local cwtmsp = ijclfi:FindFirstChild(string.char(73,110,110,101,114))
-                        if cwtmsp then
-                            local owcrpt = cwtmsp:FindFirstChild(string.char(81,117,97,110,116,105,116,121))
-                            local ignpql          = cwtmsp:FindFirstChild(string.char(73,99,111,110))
-        
-                            local kycvdx = owcrpt and tostring(owcrpt.Text) or string.char(63)
-                            local vugjrz   = ignpql and tostring(ignpql.Image) or string.char(63)
-                            local hyexxx    = celnrb[vugjrz]
-        
-                            if not hyexxx then
-                                local epyfnn = vugjrz:match(string.char(114,98,120,97,115,115,101,116,105,100,58,47,47,40,37,100,43,41)) or vugjrz:match(string.char(105,100,61,40,37,100,43,41)) or vugjrz
-                                hyexxx = string.char(85,110,107,110,111,119,110)
-        
-                                local rtzzan, xgqmcd = pcall(axdgfx, {
-                                    Url     = string.char(104,116,116,112,115,58,47,47,101,99,111,110,111,109,121,46,114,111,98,108,111,120,46,99,111,109,47,118,50,47,97,115,115,101,116,115,47) .. epyfnn .. string.char(47,100,101,116,97,105,108,115),
-                                    Method  = string.char(71,69,84),
-                                    Headers = { [string.char(67,111,110,116,101,110,116,45,84,121,112,101)] = string.char(97,112,112,108,105,99,97,116,105,111,110,47,106,115,111,110) }
-                                })
-                                if rtzzan and xgqmcd and xgqmcd.StatusCode == 200 then
-                                    local qttpne, wtdtlt = pcall(vqaaib.JSONDecode, vqaaib, xgqmcd.Body)
-                                    if qttpne and wtdtlt and wtdtlt.Name then
-                                        hyexxx = jtbxwg(wtdtlt.Name)
-                                        celnrb[vugjrz] = hyexxx
-                                    end
-                                end
+        descLines[#descLines + 1] = "```"
+    end
+
+    if shouldPing then
+        descLines[#descLines + 1] = ">>> RARE DROP DETECTED"
+    end
+
+    local embed = {
+        title       = "Rewards Update - " .. playerName,
+        url         = gameLink,
+        description = table.concat(descLines, "\n"),
+        color       = shouldPing and 15158332 or 5793266,
+        thumbnail   = { url = gameIconUrl },
+        footer      = { text = "Game ID: " .. PLACE_ID .. " | Universe: " .. UNIVERSE_ID },
+        timestamp   = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+    local payload = {
+        username = "Wesh the diddler",
+        embeds   = { embed },
+    }
+
+    if shouldPing then
+        payload.content = "<@" .. PING_USER_ID .. "> Rare drop detected! - " .. playerName
+    end
+
+    local ok, encoded = pcall(HttpService.JSONEncode, HttpService, payload)
+    if not ok then return end
+
+    pcall(requestFunction, {
+        Url     = webhookUrl,
+        Method  = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body    = encoded
+    })
+
+    task.wait(1)
+end
+
+local player = Players.LocalPlayer
+
+local iconLabels = {
+    ["rbxassetid://15296242924"]     = "EXP",
+    ["rbxassetid://15147178963"]     = "Gold",
+    ["rbxassetid://138197199153705"] = "Canes",
+    ["rbxassetid://15147184586"]     = "Gems",
+}
+
+local lastSnapshot = ""
+
+local function getRewards(items)
+    local gold, xp, canes = "?", "?", "?"
+    local unknowns = {}
+
+    local serumCounts = {
+        female   = 0,
+        attack   = 0,
+        armored  = 0,
+        colossal = 0,
+    }
+
+    for _, slot in ipairs(items:GetChildren()) do
+        if slot:IsA("Frame") then
+            local main = slot:FindFirstChild("Main")
+            if main then
+                local inner = main:FindFirstChild("Inner")
+                if inner then
+                    local quantityLabel = inner:FindFirstChild("Quantity")
+                    local icon          = inner:FindFirstChild("Icon")
+
+                    local quantity = quantityLabel and tostring(quantityLabel.Text) or "?"
+                    local iconId   = icon and tostring(icon.Image) or "?"
+                    local label    = iconLabels[iconId]
+
+                    if not label then
+                        local assetId = iconId:match("rbxassetid://(%d+)") or iconId:match("id=(%d+)") or iconId
+                        label = "Unknown"
+
+                        local ok, response = pcall(requestFunction, {
+                            Url     = "https://economy.roblox.com/v2/assets/" .. assetId .. "/details",
+                            Method  = "GET",
+                            Headers = { ["Content-Type"] = "application/json" }
+                        })
+                        if ok and response and response.StatusCode == 200 then
+                            local ok2, data = pcall(HttpService.JSONDecode, HttpService, response.Body)
+                            if ok2 and data and data.Name then
+                                label = stripEmojis(data.Name)
+                                iconLabels[iconId] = label
                             end
-        
-                            if hyexxx == string.char(71,111,108,100) then
-                                qeimtv = kycvdx
-                            elseif hyexxx == string.char(69,88,80) then
-                                rajmww = kycvdx
-                            elseif hyexxx == string.char(67,97,110,101,115) then
-                                pyedxj = kycvdx
-                            elseif hyexxx == string.char(71,101,109,115) then
-                                iznzup(kycvdx)
-                            else
-                                uytvnb[#uytvnb + 1] = jtbxwg(hyexxx) .. string.char(32,124,32,81,116,121,58,32) .. kycvdx
-        
-                                local xanhht = hyexxx:pwjbqz()
-                                local xiwnxu = wocczi(kycvdx)
-                                if xiwnxu <= 0 then xiwnxu = 1 end
-        
-                                if xanhht:find(string.char(102,101,109,97,108,101,32,115,101,114,117,109)) then
-                                    jwzqdo.female = jwzqdo.female + xiwnxu
-                                elseif xanhht:find(string.char(97,116,116,97,99,107,32,115,101,114,117,109)) then
-                                    jwzqdo.attack = jwzqdo.attack + xiwnxu
-                                elseif xanhht:find(string.char(97,114,109,111,114,101,100,32,115,101,114,117,109)) then
-                                    jwzqdo.armored = jwzqdo.armored + xiwnxu
-                                elseif xanhht:find(string.char(115,101,114,117,109)) then
-                                    jwzqdo.colossal = jwzqdo.colossal + xiwnxu
-                                end
-                            end
+                        end
+                    end
+
+                    if label == "Gold" then
+                        gold = quantity
+                    elseif label == "EXP" then
+                        xp = quantity
+                    elseif label == "Canes" then
+                        canes = quantity
+                    elseif label == "Gems" then
+                        sendGemsToFlask(quantity)
+                    else
+                        unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
+
+                        local lowerLabel = label:lower()
+                        local qty = parseRobloxNumber(quantity)
+                        if qty <= 0 then qty = 1 end
+
+                        if lowerLabel:find("female serum") then
+                            serumCounts.female = serumCounts.female + qty
+                        elseif lowerLabel:find("attack serum") then
+                            serumCounts.attack = serumCounts.attack + qty
+                        elseif lowerLabel:find("armored serum") then
+                            serumCounts.armored = serumCounts.armored + qty
+                        elseif lowerLabel:find("serum") then
+                            serumCounts.colossal = serumCounts.colossal + qty
                         end
                     end
                 end
             end
-        
-            return qeimtv, rajmww, pyedxj, uytvnb, jwzqdo
         end
-        
-        gghzcd()
-        
-        local ixohqu       = mkxanc:WaitForChild(string.char(80,108,97,121,101,114,71,117,105))
-        local ytrcqi = ixohqu:WaitForChild(string.char(73,110,116,101,114,102,97,99,101))
-        local kvthgr   = ytrcqi:WaitForChild(string.char(82,101,119,97,114,100,115))
-        local ckufwq     = kvthgr:WaitForChild(string.char(77,97,105,110))
-        local tmeuok      = ckufwq:WaitForChild(string.char(73,110,102,111))
-        local zwmvjc     = tmeuok:WaitForChild(string.char(77,97,105,110))
-        local ctuscq     = zwmvjc:WaitForChild(string.char(73,116,101,109,115))
-        
-        kvthgr.Changed:Connect(reiqby(prop)
-            if prop == string.char(86,105,115,105,98,108,101) and kvthgr.Visible then
-                task.wait(0.5)
-        
-                local rtzzan, qeimtv, rajmww, pyedxj, uytvnb, jwzqdo = pcall(loygdz, ctuscq)
-        
-                if rtzzan then
-                    revdcv(qeimtv)
-        
-                    if jwzqdo.female   > 0 then fgwqcz(jwzqdo.female)     end
-                    if jwzqdo.attack   > 0 then yxgthy(jwzqdo.attack)     end
-                    if jwzqdo.armored  > 0 then nffaow(jwzqdo.armored)   end
-                    if jwzqdo.colossal > 0 then cqoawk(jwzqdo.colossal) end
-        
-                    local kevjam = string.format(string.char(71,111,108,100,58,37,115,124,88,80,58,37,115,124,67,97,110,101,115,58,37,115), qeimtv, rajmww, pyedxj)
-                    if uytvnb and #uytvnb > 0 then
-                        kevjam = kevjam .. string.char(124) .. table.concat(uytvnb, string.char(124))
-                    end
-        
-                    if kevjam ~= ndpwrc then
-                        ndpwrc = kevjam
-                        csvmfq(qeimtv, rajmww, pyedxj, uytvnb)
-                    end
-                end
-            end
-        end)
-        
-        qwxvya = 0
     end
+
+    return gold, xp, canes, unknowns, serumCounts
 end
+
+setupTeleportQueue()
+
+local gui       = player:WaitForChild("PlayerGui")
+local interface = gui:WaitForChild("Interface")
+local rewards   = interface:WaitForChild("Rewards")
+local main1     = rewards:WaitForChild("Main")
+local info      = main1:WaitForChild("Info")
+local main2     = info:WaitForChild("Main")
+local items     = main2:WaitForChild("Items")
+
+rewards.Changed:Connect(function(prop)
+    if prop == "Visible" and rewards.Visible then
+        task.wait(0.5)
+
+        local ok, gold, xp, canes, unknowns, serumCounts = pcall(getRewards, items)
+
+        if ok then
+            sendGoldToFlask(gold)
+
+            if serumCounts.female   > 0 then sendFemaleSerumToFlask(serumCounts.female)     end
+            if serumCounts.attack   > 0 then sendAttackSerumToFlask(serumCounts.attack)     end
+            if serumCounts.armored  > 0 then sendArmoredSerumToFlask(serumCounts.armored)   end
+            if serumCounts.colossal > 0 then sendColossalSerumToFlask(serumCounts.colossal) end
+
+            local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
+            if unknowns and #unknowns > 0 then
+                snapshot = snapshot .. "|" .. table.concat(unknowns, "|")
+            end
+
+            if snapshot ~= lastSnapshot then
+                lastSnapshot = snapshot
+                sendWebhook(gold, xp, canes, unknowns)
+            end
+        end
+    end
+end)
