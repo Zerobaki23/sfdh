@@ -3,14 +3,14 @@ local Players = game:GetService("Players")
 
 local BASE_URL = "https://uncaring-squabble-excavate.ngrok-free.dev"
 
-local FLASK_SERUM_URL          = BASE_URL .. "/api/serum"
-local FLASK_GOLD_URL           = BASE_URL .. "/api/gold"
-local FLASK_GEMS_URL           = BASE_URL .. "/api/gems"
-local FLASK_FEMALE_SERUM_URL   = BASE_URL .. "/api/female_serum"
-local FLASK_ATTACK_SERUM_URL   = BASE_URL .. "/api/attack_serum"
-local FLASK_ARMORED_SERUM_URL  = BASE_URL .. "/api/armored_serum"
+local FLASK_SERUM_URL         = BASE_URL .. "/api/serum"
+local FLASK_GOLD_URL          = BASE_URL .. "/api/gold"
+local FLASK_GEMS_URL          = BASE_URL .. "/api/gems"
+local FLASK_FEMALE_SERUM_URL  = BASE_URL .. "/api/female_serum"
+local FLASK_ATTACK_SERUM_URL  = BASE_URL .. "/api/attack_serum"
+local FLASK_ARMORED_SERUM_URL = BASE_URL .. "/api/armored_serum"
 
-local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
+local webhookUrl   = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
 local PING_USER_ID = "832942242498084888"
 
 local requestFunction =
@@ -37,14 +37,11 @@ end
 local function parseRobloxNumber(str)
     if not str then return 0 end
     local s = tostring(str):gsub("%s+", "")
-
     local suffixes = { K = 1e3, M = 1e6, B = 1e9, T = 1e12 }
     local num, suffix = s:match("^([%d%.]+)([KkMmBbTt])$")
     if num and suffix then
-        local mult = suffixes[suffix:upper()]
-        return math.floor((tonumber(num) or 0) * mult)
+        return math.floor((tonumber(num) or 0) * suffixes[suffix:upper()])
     end
-
     local cleaned = s:gsub(",", ""):gsub("[^%d]", "")
     if cleaned == "" then return 0 end
     return tonumber(cleaned) or 0
@@ -77,7 +74,7 @@ local function sendGoldToFlask(amount)
     print("[Gold Tracker] Raw UI value: " .. tostring(amount))
     local numAmount = parseRobloxNumber(amount)
     if numAmount <= 0 then
-        warn("[Gold Tracker] Skipping non-positive gold value: " .. tostring(amount))
+        warn("[Gold Tracker] Skipping non-positive value: " .. tostring(amount))
         return
     end
     postToFlask(FLASK_GOLD_URL, { amount = numAmount }, "Gold Tracker")
@@ -87,7 +84,7 @@ local function sendGemsToFlask(amount)
     print("[Gems Tracker] Raw UI value: " .. tostring(amount))
     local numAmount = parseRobloxNumber(amount)
     if numAmount <= 0 then
-        warn("[Gems Tracker] Skipping non-positive gems value: " .. tostring(amount))
+        warn("[Gems Tracker] Skipping non-positive value: " .. tostring(amount))
         return
     end
     postToFlask(FLASK_GEMS_URL, { amount = numAmount }, "Gems Tracker")
@@ -115,8 +112,7 @@ end
 local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
-        local lower = tostring(entry):lower()
-        if lower:find("serum") then return true end
+        if tostring(entry):lower():find("serum") then return true end
     end
     return false
 end
@@ -195,27 +191,16 @@ local iconLabels = {
     ["rbxassetid://138197199153705"] = "Canes",
 }
 
--- Maps lowercase keywords found in item labels → which Flask sender to call
--- Order matters: more specific patterns first
-local serumRoutes = {
-    { pattern = "female serum",   sender = sendFemaleSerumToFlask   },
-    { pattern = "attack serum",   sender = sendAttackSerumToFlask   },
-    { pattern = "armored serum",  sender = sendArmoredSerumToFlask  },
-    { pattern = "colossal serum", sender = sendColossalSerumToFlask },
-    { pattern = "serum",          sender = sendColossalSerumToFlask }, -- fallback for any other serum
-}
-
 local lastSnapshot = ""
 
 local function getRewards(items)
     local gold, xp, canes = "?", "?", "?"
     local unknowns = {}
 
-    -- Accumulate per-type serum counts before sending
     local serumCounts = {
-        female  = 0,
-        attack  = 0,
-        armored = 0,
+        female   = 0,
+        attack   = 0,
+        armored  = 0,
         colossal = 0,
     }
 
@@ -256,11 +241,11 @@ local function getRewards(items)
                         xp = quantity
                     elseif label == "Canes" then
                         canes = quantity
-                    elseif label == "Gems" then
-                        -- Gems: send directly, no unknowns entry needed
+                    elseif label == "1" then
                         sendGemsToFlask(quantity)
+                        unknowns[#unknowns + 1] = "Gems (id: " .. iconId .. ") | Qty: " .. quantity
                     else
-                        unknowns[#unknowns + 1] = stripEmojis(label) .. " | Qty: " .. quantity
+                        unknowns[#unknowns + 1] = stripEmojis(label) .. " (id: " .. iconId .. ") | Qty: " .. quantity
 
                         local lowerLabel = label:lower()
                         local qty = parseRobloxNumber(quantity)
@@ -304,13 +289,11 @@ rewards.Changed:Connect(function(prop)
         local ok, gold, xp, canes, unknowns, serumCounts = pcall(getRewards, items)
 
         if ok then
-            -- Send gold
             sendGoldToFlask(gold)
 
-            -- Send each serum type if found
-            if serumCounts.female  > 0 then sendFemaleSerumToFlask(serumCounts.female)   end
-            if serumCounts.attack  > 0 then sendAttackSerumToFlask(serumCounts.attack)   end
-            if serumCounts.armored > 0 then sendArmoredSerumToFlask(serumCounts.armored) end
+            if serumCounts.female   > 0 then sendFemaleSerumToFlask(serumCounts.female)     end
+            if serumCounts.attack   > 0 then sendAttackSerumToFlask(serumCounts.attack)     end
+            if serumCounts.armored  > 0 then sendArmoredSerumToFlask(serumCounts.armored)   end
             if serumCounts.colossal > 0 then sendColossalSerumToFlask(serumCounts.colossal) end
 
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
