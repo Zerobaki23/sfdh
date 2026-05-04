@@ -121,7 +121,10 @@ local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
         local lower = tostring(entry):lower()
-        if lower:find("serum") or lower:find("scroll") then return true end
+        -- Only ping for serums, not scrolls
+        if lower:find("serum") and not lower:find("scroll") then
+            return true
+        end
     end
     return false
 end
