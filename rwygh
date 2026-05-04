@@ -9,6 +9,7 @@ local FLASK_GEMS_URL           = BASE_URL .. "/api/gems"
 local FLASK_FEMALE_SERUM_URL   = BASE_URL .. "/api/female_serum"
 local FLASK_ATTACK_SERUM_URL   = BASE_URL .. "/api/attack_serum"
 local FLASK_ARMORED_SERUM_URL  = BASE_URL .. "/api/armored_serum"
+local FLASK_SCROLLS_URL        = BASE_URL .. "/api/scrolls"
 
 local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
 local PING_USER_ID = "832942242498084888"
@@ -112,11 +113,15 @@ local function sendArmoredSerumToFlask(count)
     postToFlask(FLASK_ARMORED_SERUM_URL, { count = count }, "Armored Serum")
 end
 
+local function sendScrollsToFlask(count)
+    postToFlask(FLASK_SCROLLS_URL, { count = count }, "Scrolls")
+end
+
 local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
         local lower = tostring(entry):lower()
-        if lower:find("serum") then return true end
+        if lower:find("serum") or lower:find("scroll") then return true end
     end
     return false
 end
@@ -206,6 +211,7 @@ local function getRewards(items)
         attack   = 0,
         armored  = 0,
         colossal = 0,
+        scrolls  = 0,
     }
 
     for _, slot in ipairs(items:GetChildren()) do
@@ -262,6 +268,8 @@ local function getRewards(items)
                             serumCounts.armored = serumCounts.armored + qty
                         elseif lowerLabel:find("serum") then
                             serumCounts.colossal = serumCounts.colossal + qty
+                        elseif lowerLabel:find("scroll") then
+                            serumCounts.scrolls = serumCounts.scrolls + qty
                         end
                     end
                 end
@@ -295,6 +303,7 @@ rewards.Changed:Connect(function(prop)
             if serumCounts.attack   > 0 then sendAttackSerumToFlask(serumCounts.attack)     end
             if serumCounts.armored  > 0 then sendArmoredSerumToFlask(serumCounts.armored)   end
             if serumCounts.colossal > 0 then sendColossalSerumToFlask(serumCounts.colossal) end
+            if serumCounts.scrolls  > 0 then sendScrollsToFlask(serumCounts.scrolls)        end
 
             local snapshot = string.format("Gold:%s|XP:%s|Canes:%s", gold, xp, canes)
             if unknowns and #unknowns > 0 then
