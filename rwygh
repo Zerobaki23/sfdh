@@ -1,8 +1,8 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
-local FLASK_SERVER_URL = "http://192.168.100.175:5000/api/serum"
-local FLASK_GOLD_URL   = "http://192.168.100.175:5000/api/gold"
+local FLASK_SERVER_URL = "https://uncaring-squabble-excavate.ngrok-free.dev/api/serum"
+local FLASK_GOLD_URL   = "https://uncaring-squabble-excavate.ngrok-free.dev/api/gold"
 
 local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
 local PING_USER_ID = "832942242498084888"
