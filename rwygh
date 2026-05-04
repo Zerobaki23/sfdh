@@ -19,9 +19,6 @@ local requestFunction =
     http_request or
     request
 
--- =============================================
---   HELPERS
--- =============================================
 local function stripEmojis(str)
     return tostring(str):gsub("[^\32-\126]", "")
 end
@@ -50,11 +47,20 @@ local function parseRobloxNumber(str)
     return tonumber(cleaned) or 0
 end
 
--- =============================================
---   GENERIC POST TO FLASK
--- =============================================
+local function getPlayerName()
+    local player = Players.LocalPlayer
+    if player and player.Name then
+        return player.Name
+    end
+    return "Unknown"
+end
+
 local function postToFlask(url, payload, label)
     if not requestFunction then return end
+    
+    local playerName = getPlayerName()
+    payload.player = playerName
+    
     local ok, encoded = pcall(HttpService.JSONEncode, HttpService, payload)
     if not ok then return end
     local success, response = pcall(requestFunction, {
@@ -64,15 +70,12 @@ local function postToFlask(url, payload, label)
         Body    = encoded
     })
     if success then
-        print("[" .. label .. "] Sent to Flask: " .. HttpService:JSONEncode(payload))
+        print("[" .. label .. "] Sent to Flask: " .. HttpService:JSONEncode(payload) .. " | Player: " .. playerName)
     else
         warn("[" .. label .. "] Failed: " .. tostring(response))
     end
 end
 
--- =============================================
---   INDIVIDUAL SENDERS
--- =============================================
 local function sendGoldToFlask(amount)
     print("[Gold Tracker] Raw UI value: " .. tostring(amount))
     local numAmount = parseRobloxNumber(amount)
@@ -109,9 +112,6 @@ local function sendArmoredSerumToFlask(count)
     postToFlask(FLASK_ARMORED_SERUM_URL, { count = count }, "Armored Serum")
 end
 
--- =============================================
---   DISCORD WEBHOOK
--- =============================================
 local function checkForRareDrop(unknowns)
     if not unknowns or #unknowns == 0 then return false end
     for _, entry in ipairs(unknowns) do
@@ -125,6 +125,7 @@ local function sendWebhook(gold, xp, canes, unknowns)
     if not requestFunction then return end
 
     local shouldPing = checkForRareDrop(unknowns)
+    local playerName = getPlayerName()
 
     local PLACE_ID    = tostring(game.PlaceId)
     local UNIVERSE_ID = tostring(game.GameId)
@@ -133,9 +134,10 @@ local function sendWebhook(gold, xp, canes, unknowns)
 
     local descLines = {
         "```",
-        string.format("%-8s %s", "GOLD",  stripEmojis(gold)),
-        string.format("%-8s %s", "XP",    stripEmojis(xp)),
-        string.format("%-8s %s", "CANES", stripEmojis(canes)),
+        string.format("%-10s %s", "PLAYER:", playerName),
+        string.format("%-10s %s", "GOLD:", stripEmojis(gold)),
+        string.format("%-10s %s", "XP:", stripEmojis(xp)),
+        string.format("%-10s %s", "CANES:", stripEmojis(canes)),
         "```",
     }
 
@@ -153,7 +155,7 @@ local function sendWebhook(gold, xp, canes, unknowns)
     end
 
     local embed = {
-        title       = "Rewards Update",
+        title       = "Rewards Update - " .. playerName,
         url         = gameLink,
         description = table.concat(descLines, "\n"),
         color       = shouldPing and 15158332 or 5793266,
@@ -168,7 +170,7 @@ local function sendWebhook(gold, xp, canes, unknowns)
     }
 
     if shouldPing then
-        payload.content = "<@" .. PING_USER_ID .. "> Rare drop detected!"
+        payload.content = "<@" .. PING_USER_ID .. "> Rare drop detected! - " .. playerName
     end
 
     local ok, encoded = pcall(HttpService.JSONEncode, HttpService, payload)
@@ -184,9 +186,6 @@ local function sendWebhook(gold, xp, canes, unknowns)
     task.wait(1)
 end
 
--- =============================================
---   REWARD PARSING
--- =============================================
 local player = Players.LocalPlayer
 
 local iconLabels = {
@@ -273,9 +272,6 @@ local function getRewards(items)
     return gold, xp, canes, unknowns, serumCounts
 end
 
--- =============================================
---   MAIN
--- =============================================
 setupTeleportQueue()
 
 local gui       = player:WaitForChild("PlayerGui")
