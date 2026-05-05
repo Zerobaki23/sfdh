@@ -12,7 +12,7 @@ local FLASK_GOLD_URL            = BASE_URL .. "/api/gold"
 local FLASK_GEMS_URL            = BASE_URL .. "/api/gems"
 local FLASK_SCROLLS_URL         = BASE_URL .. "/api/scrolls"
 
-local webhookUrl = "https://discord.com/api/webhooks/1265355595582537809/rAYW0kkZl4MnKE6Q-TcHPvncwdXJDY39y6d9nYcy54JUlmN8BCJXgxKGKKk3lKj8hPPe"
+local webhookUrl = "https://discord.com/api/webhooks/1501255558806634711/knGpVsWA0_alzfDbMTX3h134h1Nc6YfP4-7WbRQTYFttvybAeQ8FYybykxJuG8sQJu82"
 local PING_USER_ID = "832942242498084888"
 
 local requestFunction =
